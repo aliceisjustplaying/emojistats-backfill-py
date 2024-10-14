@@ -1,20 +1,22 @@
 import os
 import json
 import asyncio
-import aiohttp
 import logging
 import multiprocessing
+from functools import partial
+from typing import Dict
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Dict
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+import aiohttp
 from tenacity import (
     retry,
     stop_after_attempt,
     wait_random_exponential,
     retry_if_exception_type,
 )
+
 from atmst.cartool import print_all_records
 
 
@@ -44,18 +46,14 @@ class FetchRequest(BaseModel):
 
 
 class RetryableError(Exception):
-    """Exception raised for retryable errors."""
-
     pass
 
 
 class NonRetryableError(Exception):
-    """Exception raised for non-retryable errors."""
-
     pass
 
 
-def parse_car(car_file_path: str):
+def parse_car(car_file_path: str) -> str:
     return json.dumps(print_all_records(car_file_path, True))
 
 
@@ -73,22 +71,6 @@ def parse_car(car_file_path: str):
 async def fetch_car_with_retry(
     session: aiohttp.ClientSession, url: str, headers: Dict[str, str], did: str
 ) -> bytes:
-    """
-    Fetches the CAR file with retry logic using tenacity.
-
-    Args:
-        session (aiohttp.ClientSession): The HTTP session.
-        url (str): The URL to fetch.
-        headers (Dict[str, str]): The request headers.
-        did (str): The DID being fetched (for logging purposes).
-
-    Returns:
-        bytes: The fetched CAR file bytes.
-
-    Raises:
-        NonRetryableError: For non-retryable HTTP status codes.
-        RetryableError: For retryable HTTP status codes or exceptions.
-    """
     try:
         async with session.get(url, headers=headers) as response:
             if response.status == 200:
@@ -96,7 +78,7 @@ async def fetch_car_with_retry(
                 if not car_bytes:
                     logging.error("Received empty CAR file.")
                     raise NonRetryableError("Received empty CAR file.")
-                return car_bytes  # Successful fetch
+                return car_bytes
             elif response.status in {429, 500, 502, 503, 504}:
                 logging.warning(
                     f"Received HTTP {response.status} for DID {did}. Retrying..."
@@ -117,14 +99,8 @@ async def fetch_car_with_retry(
 
 
 @app.post("/fetch")
-async def fetch_car_file(request: FetchRequest):
-    """
-    Fetches the CAR file for the given DID and PDS, parses it, saves it,
-    and returns the extracted data as JSON.
-    """
-    did = request.did
-    pds = request.pds
-
+async def fetch_car_file(request: FetchRequest) -> str:
+    did, pds = request.did, request.pds
     url = f"https://{pds}/xrpc/com.atproto.sync.getRepo?did={did}"
     headers = {
         "Accept": "application/vnd.ipld.car",
@@ -133,7 +109,6 @@ async def fetch_car_file(request: FetchRequest):
 
     logging.info(f"Fetching CAR file for DID: {did} from PDS: {pds}")
 
-    # Fetch CAR file with retries using tenacity
     try:
         async with aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=60)
@@ -152,18 +127,15 @@ async def fetch_car_file(request: FetchRequest):
         logging.error(f"Unexpected error while fetching CAR file for DID {did}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error.")
 
-    car_file_path = None
+    # Save CAR file
     try:
-        # Create filename from DID, replacing colons with underscores
         filename = f"{did.replace(':', '_')}.car"
         car_file_path = os.path.join(CAR_FILES_DIR, filename)
 
-        # Delete existing file if it exists
         if os.path.exists(car_file_path):
             os.remove(car_file_path)
             logging.info(f"Deleted existing CAR file: {car_file_path}")
 
-        # Save the new CAR file
         with open(car_file_path, "wb") as f:
             f.write(car_bytes)
         logging.info(f"Saved CAR file to {car_file_path}")
@@ -171,7 +143,7 @@ async def fetch_car_file(request: FetchRequest):
         logging.error(f"Error saving CAR file: {e}")
         raise HTTPException(status_code=500, detail="Error saving CAR file.")
 
-    # Parse CAR file in thread pool
+    # Parse CAR file
     try:
         loop = asyncio.get_running_loop()
         parsed_data = await loop.run_in_executor(
