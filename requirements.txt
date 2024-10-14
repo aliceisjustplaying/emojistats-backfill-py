@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+aiohttp
+async-timeout
+pydantic
+tenacity
+python-dotenv
+ruff
+../atmst
