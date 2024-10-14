@@ -7,6 +7,7 @@ from functools import partial
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor
 import aiohttp
@@ -53,8 +54,10 @@ class NonRetryableError(Exception):
     pass
 
 
-def parse_car(car_file_path: str) -> str:
-    return json.dumps(print_all_records(car_file_path, True))
+async def parse_car(car_file_path: str) -> str:
+    records = print_all_records(car_file_path, True)
+    for k, v in records.items():
+        yield json.dumps({k: v}) + "\n"
 
 
 @retry(
@@ -154,4 +157,4 @@ async def fetch_car_file(request: FetchRequest) -> str:
         logging.error(f"Error parsing CAR file: {e}")
         raise HTTPException(status_code=500, detail="Error parsing CAR file.")
 
-    return parsed_data
+    return StreamingResponse(parsed_data)
