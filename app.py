@@ -106,7 +106,11 @@ async def fetch_car_with_retry(
 
 @app.post("/fetch")
 async def fetch_car_file(request: FetchRequest) -> str:
-    did, pds = request.did, request.pds
+    did, pds = request.did, request.pds.strip().lower().rstrip("/")
+    if pds.startswith("https://"):
+        pds = pds[8:]
+    elif pds.startswith("http://"):
+        pds = pds[7:]
     url = f"https://{pds}/xrpc/com.atproto.sync.getRepo?did={did}"
     headers = {
         "Accept": "application/vnd.ipld.car",
