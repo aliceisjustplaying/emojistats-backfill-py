@@ -82,7 +82,7 @@ async def fetch_car_with_retry(
                     logging.error("Received empty CAR file.")
                     raise NonRetryableError("Received empty CAR file.")
                 return car_bytes
-            elif response.status in {429, 500, 502, 503, 504}:
+            elif response.status in {429, 503, 504}:
                 logging.warning(
                     f"Received HTTP {response.status} for DID {did}. Retrying..."
                 )
