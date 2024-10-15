@@ -6,4 +6,4 @@ pydantic
 tenacity
 python-dotenv
 ruff
-../atmst
+git+https://github.com/aliceisjustplaying/atmst.git@main
