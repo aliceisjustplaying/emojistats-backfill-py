@@ -90,6 +90,9 @@ async def fetch_car_with_retry(
             else:
                 logging.error(f"Failed to fetch CAR file: HTTP {response.status}")
                 raise NonRetryableError(f"HTTP {response.status} error.")
+    except aiohttp.ClientConnectorError as e:
+        logging.error(f"DNS resolution error for DID {did}: {e}")
+        raise NonRetryableError("DNS resolution error.")
     except aiohttp.ClientResponseError as e:
         logging.error(f"Client response error for DID {did}: {e}")
         raise RetryableError(str(e))
