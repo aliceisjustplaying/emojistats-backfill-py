@@ -18,7 +18,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from atmst.cartool import print_all_records
+from atmst.cartool import get_posts_and_profiles
 
 
 # Configure logging
@@ -55,7 +55,7 @@ class NonRetryableError(Exception):
 
 
 async def parse_car(car_file_path: str) -> str:
-    records = print_all_records(car_file_path, True)
+    records = get_posts_and_profiles(car_file_path)
     for k, v in records.items():
         yield json.dumps({k: v}) + "\n"
 
@@ -106,11 +106,8 @@ async def fetch_car_with_retry(
 
 @app.post("/fetch")
 async def fetch_car_file(request: FetchRequest) -> str:
-    did, pds = request.did, request.pds.strip().lower().rstrip("/")
-    if pds.startswith("https://"):
-        pds = pds[8:]
-    elif pds.startswith("http://"):
-        pds = pds[7:]
+    did = request.did
+    pds = request.pds.strip().lower().rstrip("/").removeprefix("https://").removeprefix("http://")
     url = f"https://{pds}/xrpc/com.atproto.sync.getRepo?did={did}"
     headers = {
         "Accept": "application/vnd.ipld.car",
